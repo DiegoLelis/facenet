@@ -56,6 +56,7 @@ def main(args):
     facenet.store_revision_info(src_path, output_dir, ' '.join(sys.argv))
     
     i = 0
+    image_limit = 5000
     for f in args.tsv_files:
         for line in f:
             fields = line.split('\t')
@@ -74,6 +75,9 @@ def main(args):
             cv2.imwrite(full_path, img) #pylint: disable=maybe-no-member
             print('%8d: %s' % (i, full_path))
             i += 1
+            if i > image_limit:
+                break
+
   
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -81,7 +85,7 @@ if __name__ == '__main__':
     parser.add_argument('output_dir', type=str, help='Output base directory for the image dataset')
     parser.add_argument('tsv_files', type=argparse.FileType('r'), nargs='+', help='Input TSV file name(s)')
     parser.add_argument('--size', type=int, help='Images are resized to the given size')
-    parser.add_argument('--output_format', type=str, help='Format of the output images', default='png', choices=['png', 'jpg'])
+    parser.add_argument('--output_format', type=str, help='Format of the output images', default='jpg', choices=['png', 'jpg'])
 
     main(parser.parse_args())
 

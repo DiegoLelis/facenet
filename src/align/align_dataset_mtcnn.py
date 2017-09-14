@@ -25,6 +25,11 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import sys
+import os.path
+sys.path.append(
+    os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
+
 from scipy import misc
 import sys
 import os
@@ -119,7 +124,7 @@ def main(args):
                         else:
                             print('Unable to align "%s"' % image_path)
                             text_file.write('%s\n' % (output_filename))
-                            
+            #break
     print('Total number of images: %d' % nrof_images_total)
     print('Number of successfully aligned images: %d' % nrof_successfully_aligned)
             
