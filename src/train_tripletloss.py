@@ -41,9 +41,11 @@ import lfw
 
 from tensorflow.python.ops import data_flow_ops
 
+from six.moves import xrange  # @UnresolvedImport
+
 def main(args):
   
-    network = importlib.import_module(args.model_def, 'inference')
+    network = importlib.import_module(args.model_def)
 
     subdir = datetime.strftime(datetime.now(), '%Y%m%d-%H%M%S')
     log_dir = os.path.join(os.path.expanduser(args.logs_base_dir), subdir)
@@ -53,6 +55,9 @@ def main(args):
     if not os.path.isdir(model_dir):  # Create the model directory if it doesn't exist
         os.makedirs(model_dir)
 
+    # Write arguments to a text file
+    facenet.write_arguments_to_file(args, os.path.join(log_dir, 'arguments.txt'))
+        
     # Store some git revision info in a text file in the log directory
     src_path,_ = os.path.split(os.path.realpath(__file__))
     facenet.store_revision_info(src_path, log_dir, ' '.join(sys.argv))
@@ -70,7 +75,7 @@ def main(args):
         # Read the file containing the pairs used for testing
         pairs = lfw.read_pairs(os.path.expanduser(args.lfw_pairs))
         # Get the paths for the corresponding images
-        lfw_paths, actual_issame = lfw.get_paths(os.path.expanduser(args.lfw_dir), pairs, args.lfw_file_ext)
+        lfw_paths, actual_issame = lfw.get_paths(os.path.expanduser(args.lfw_dir), pairs)
         
     
     with tf.Graph().as_default():
@@ -100,7 +105,7 @@ def main(args):
             images = []
             for filename in tf.unstack(filenames):
                 file_contents = tf.read_file(filename)
-                image = tf.image.decode_png(file_contents)
+                image = tf.image.decode_image(file_contents, channels=3)
                 
                 if args.random_crop:
                     image = tf.random_crop(image, [args.image_size, args.image_size, 3])
@@ -119,6 +124,9 @@ def main(args):
             shapes=[(args.image_size, args.image_size, 3), ()], enqueue_many=True,
             capacity=4 * nrof_preprocess_threads * args.batch_size,
             allow_smaller_final_batch=True)
+        image_batch = tf.identity(image_batch, 'image_batch')
+        image_batch = tf.identity(image_batch, 'input')
+        labels_batch = tf.identity(labels_batch, 'label_batch')
 
         # Build the inference graph
         prelogits, _ = network.inference(image_batch, args.keep_probability, 
@@ -186,7 +194,6 @@ def main(args):
                             batch_size_placeholder, learning_rate_placeholder, phase_train_placeholder, enqueue_op, actual_issame, args.batch_size, 
                             args.lfw_nrof_folds, log_dir, step, summary_writer, args.embedding_size)
 
-    sess.close()
     return model_dir
 
 
@@ -212,7 +219,7 @@ def train(args, sess, dataset, epoch, image_paths_placeholder, labels_placeholde
         sess.run(enqueue_op, {image_paths_placeholder: image_paths_array, labels_placeholder: labels_array})
         emb_array = np.zeros((nrof_examples, embedding_size))
         nrof_batches = int(np.ceil(nrof_examples / args.batch_size))
-        for i in xrange(nrof_batches):
+        for i in range(nrof_batches):
             batch_size = min(nrof_examples-i*args.batch_size, args.batch_size)
             emb, lab = sess.run([embeddings, labels_batch], feed_dict={batch_size_placeholder: batch_size, 
                 learning_rate_placeholder: lr, phase_train_placeholder: True})
@@ -238,6 +245,8 @@ def train(args, sess, dataset, epoch, image_paths_placeholder, labels_placeholde
         i = 0
         emb_array = np.zeros((nrof_examples, embedding_size))
         loss_array = np.zeros((nrof_triplets,))
+        summary = tf.Summary()
+        step = 0
         while i < nrof_batches:
             start_time = time.time()
             batch_size = min(nrof_examples-i*args.batch_size, args.batch_size)
@@ -251,9 +260,9 @@ def train(args, sess, dataset, epoch, image_paths_placeholder, labels_placeholde
             batch_number += 1
             i += 1
             train_time += duration
+            summary.value.add(tag='loss', simple_value=err)
             
         # Add validation loss and accuracy to summary
-        summary = tf.Summary()
         #pylint: disable=maybe-no-member
         summary.value.add(tag='time/selection', simple_value=selection_time)
         summary_writer.add_summary(summary, step)
@@ -418,7 +427,7 @@ def parse_arguments(argv):
     parser.add_argument('--pretrained_model', type=str,
         help='Load a pretrained model before training starts.')
     parser.add_argument('--data_dir', type=str,
-        help='Path to the data directory containing aligned face patches. Multiple directories are separated with colon.',
+        help='Path to the data directory containing aligned face patches.',
         default='~/datasets/casia/casia_maxpy_mtcnnalign_182_160')
     parser.add_argument('--model_def', type=str,
         help='Model definition. Points to a module containing the definition of the inference graph.', default='models.inception_resnet_v1')
@@ -466,10 +475,8 @@ def parse_arguments(argv):
     # Parameters for validation on LFW
     parser.add_argument('--lfw_pairs', type=str,
         help='The file containing the pairs to use for validation.', default='data/pairs.txt')
-    parser.add_argument('--lfw_file_ext', type=str,
-        help='The file extension for the LFW dataset.', default='png', choices=['jpg', 'png'])
     parser.add_argument('--lfw_dir', type=str,
-        help='Path to the data directory containing aligned face patches.', default='~/datasets/lfw/lfw_realigned/')
+        help='Path to the data directory containing aligned face patches.', default='')
     parser.add_argument('--lfw_nrof_folds', type=int,
         help='Number of folds to use for cross validation. Mainly used for testing.', default=10)
     return parser.parse_args(argv)

@@ -41,7 +41,7 @@ import math
 def main(args):
     
     pairs = lfw.read_pairs(os.path.expanduser(args.lfw_pairs))
-    paths, actual_issame = lfw.get_paths(os.path.expanduser(args.lfw_dir), pairs, args.lfw_file_ext)
+    paths, actual_issame = lfw.get_paths(os.path.expanduser(args.lfw_dir), pairs)
     result_dir = '../data/'
     plt.ioff()  # Disable interactive plotting mode
     
@@ -137,7 +137,7 @@ def save_result(aug, acc, filename):
             f.write('%6.4f %6.4f\n' % (aug[i], acc[i]))
             
 def evaluate_accuracy(sess, images_placeholder, phase_train_placeholder, image_size, embeddings, 
-        paths, actual_issame, augument_images, aug_value, batch_size, orig_image_size, seed):
+        paths, actual_issame, augment_images, aug_value, batch_size, orig_image_size, seed):
     nrof_images = len(paths)
     nrof_batches = int(math.ceil(1.0*nrof_images / batch_size))
     emb_list = []
@@ -146,7 +146,7 @@ def evaluate_accuracy(sess, images_placeholder, phase_train_placeholder, image_s
         end_index = min((i+1)*batch_size, nrof_images)
         paths_batch = paths[start_index:end_index]
         images = facenet.load_data(paths_batch, False, False, orig_image_size)
-        images_aug = augument_images(images, aug_value, image_size)
+        images_aug = augment_images(images, aug_value, image_size)
         feed_dict = { images_placeholder: images_aug, phase_train_placeholder: False }
         emb_list += sess.run([embeddings], feed_dict=feed_dict)
     emb_array = np.vstack(emb_list)  # Stack the embeddings to a nrof_examples_per_epoch x 128 matrix
@@ -198,8 +198,6 @@ def parse_arguments(argv):
         help='Number of scales to evaluate.', default=21)
     parser.add_argument('--lfw_pairs', type=str,
         help='The file containing the pairs to use for validation.', default='../data/pairs.txt')
-    parser.add_argument('--lfw_file_ext', type=str,
-        help='The file extension for the LFW dataset.', default='png', choices=['jpg', 'png'])
     parser.add_argument('--lfw_dir', type=str,
         help='Path to the data directory containing aligned face patches.', default='~/datasets/lfw/lfw_realigned/')
     parser.add_argument('--orig_image_size', type=int,
